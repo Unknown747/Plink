@@ -18,14 +18,14 @@ from math import comb
 # ─────────────────────────────────────────────
 SIM_CONFIG = {
     "startBalance":  200_000,
-    "baseBet":         1_000,
+    "baseBet":           500,   # sesuai live: Rp 500
     "rows":               15,
     "risk":            "low",
-    "stopLoss":      100_000,   # Rp 100.000 (50% modal)
-    "takeProfit":    100_000,   # Rp 100.000
-    "maxSpins":        5_000,   # Batas spin per sesi
+    "stopLoss":       10_000,   # sesuai live config
+    "takeProfit":      5_000,   # sesuai live config
+    "maxSpins":        1_000,   # sesuai live config
     "jumlahTest":         10,   # Jumlah sesi yang diulang
-    "printInterval":     500,   # Cetak log tiap N spin
+    "printInterval":     250,   # Cetak log tiap N spin
 }
 
 # ─────────────────────────────────────────────

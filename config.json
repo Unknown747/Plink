@@ -6,8 +6,8 @@
 
   "maxSpins": 1000,
   "targetWager": 10000000,
-  "stopLoss": 5000,
-  "takeProfit": 20000,
+  "stopLoss": 10000,
+  "takeProfit": 5000,
 
   "delayInterval": 0.4,
   "retryDelay": 2,
