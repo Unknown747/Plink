@@ -54,8 +54,8 @@ stats = {
 # 2. GRAPHQL QUERIES
 # ─────────────────────────────────────────────
 PLINKO_BET_MUTATION = """
-mutation Plinkobet($amount: Float!, $rows: Int!, $risk: CasinoGamePlinkoRisk!) {
-  plinko_bet(amount: $amount, rows: $rows, risk: $risk) {
+mutation PlinkoBet($amount: Float!, $rows: Int!, $risk: CasinoGamePlinkoRiskEnum!, $currency: CurrencyEnum!) {
+  plinkoBet(amount: $amount, rows: $rows, risk: $risk, currency: $currency) {
     id
     active
     payoutMultiplier
@@ -64,7 +64,7 @@ mutation Plinkobet($amount: Float!, $rows: Int!, $risk: CasinoGamePlinkoRisk!) {
     payout
     updatedAt
     currency
-    game { name }
+    game
     user {
       id
       name
@@ -79,6 +79,7 @@ mutation Plinkobet($amount: Float!, $rows: Int!, $risk: CasinoGamePlinkoRisk!) {
 BALANCE_QUERY = """
 query UserBalance {
   user {
+    name
     balances {
       available { amount currency }
     }
@@ -89,13 +90,53 @@ query UserBalance {
 # ─────────────────────────────────────────────
 # 3. FUNGSI API
 # ─────────────────────────────────────────────
-def get_current_balance() -> float:
-    """Ambil saldo akun saat ini dari Stake API."""
+def get_all_balances() -> list:
+    """Ambil semua saldo dari semua currency."""
     try:
         r = requests.post(API_URL, json={"query": BALANCE_QUERY}, headers=HEADERS, timeout=10)
-        r.raise_for_status()
+        if not r.ok:
+            print(f"[PERINGATAN] Gagal ambil saldo HTTP {r.status_code}: {r.text[:300]}")
+            return []
         data = r.json()
-        return float(data["data"]["user"]["balances"][0]["available"]["amount"])
+        if "errors" in data:
+            print(f"[PERINGATAN] GraphQL error saldo: {data['errors']}")
+            return []
+        user = data["data"]["user"]
+        print(f"  Username    : {user['name']}")
+        balances = user["balances"]
+        # Tampilkan semua saldo yang ada isinya
+        has_funds = []
+        for b in balances:
+            amt = float(b["available"]["amount"])
+            cur = b["available"]["currency"]
+            if amt > 0:
+                print(f"  Saldo {cur.upper():6s}: {amt:.8f}")
+                has_funds.append(b["available"])
+        if not has_funds:
+            print("  [!] Semua saldo kosong. Pastikan currency di config.json sesuai.")
+        return has_funds
+    except Exception as e:
+        print(f"[PERINGATAN] Gagal ambil saldo: {e}")
+        return []
+
+
+def get_current_balance() -> float:
+    """Ambil saldo untuk currency yang dikonfigurasi."""
+    target_currency = BOT_CONFIG.get("currency", "btc")
+    try:
+        r = requests.post(API_URL, json={"query": BALANCE_QUERY}, headers=HEADERS, timeout=10)
+        if not r.ok:
+            print(f"[PERINGATAN] Gagal ambil saldo HTTP {r.status_code}: {r.text[:300]}")
+            return 0.0
+        data = r.json()
+        if "errors" in data:
+            print(f"[PERINGATAN] GraphQL error saldo: {data['errors']}")
+            return 0.0
+        balances = data["data"]["user"]["balances"]
+        for b in balances:
+            if b["available"]["currency"] == target_currency:
+                return float(b["available"]["amount"])
+        return 0.0
     except Exception as e:
         print(f"[PERINGATAN] Gagal ambil saldo: {e}")
         return 0.0
@@ -109,16 +150,22 @@ def send_bet(amount: float, rows: int, risk: str) -> dict:
     """
     payload = {
         "query": PLINKO_BET_MUTATION,
-        "variables": {"amount": amount, "rows": rows, "risk": risk},
+        "variables": {
+            "amount":   amount,
+            "rows":     rows,
+            "risk":     risk,
+            "currency": BOT_CONFIG.get("currency", "btc"),
+        },
     }
     r = requests.post(API_URL, json=payload, headers=HEADERS, timeout=10)
-    r.raise_for_status()
+    if not r.ok:
+        raise Exception(f"HTTP {r.status_code}: {r.text[:500]}")
     data = r.json()
 
     if "errors" in data:
-        raise Exception(f"API Error: {data['errors']}")
+        raise Exception(f"GraphQL Error: {data['errors']}")
 
-    bet = data["data"]["plinko_bet"]
+    bet = data["data"]["plinkoBet"]
     return {
         "multiplier": float(bet["payoutMultiplier"]),
         "payout":     float(bet["payout"]),
@@ -185,8 +232,9 @@ def execute_single_bet() -> bool:
 def start_bot():
     print_header()
 
+    get_all_balances()
     stats["initialBalance"] = get_current_balance()
-    print(f"  Saldo Awal  : {stats['initialBalance']:,.2f}")
+    print(f"  Saldo {BOT_CONFIG.get('currency','btc').upper():6s}: {stats['initialBalance']:.8f}")
     print("=" * 55)
     print("  Bot berjalan... tekan Ctrl+C untuk hentikan manual.")
     print("=" * 55 + "\n")
