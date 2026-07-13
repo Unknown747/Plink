@@ -12,23 +12,22 @@
 """
 
 import json
+import logging
 import os
 import time
+from logging.handlers import RotatingFileHandler
 
 import requests
 from dotenv import load_dotenv
 
 # ─────────────────────────────────────────────
-# 0. LOAD ENV & CONFIG
+# 0. LOAD ENV
 # ─────────────────────────────────────────────
 load_dotenv()
 
 API_KEY = os.environ.get("STAKE_API_KEY", "")
 if not API_KEY:
     raise SystemExit("[ERROR] STAKE_API_KEY belum diisi di Replit Secrets.")
-
-with open("config.json", "r") as f:
-    BOT_CONFIG = json.load(f)
 
 API_URL = "https://stake.com/_api/graphql"
 HEADERS = {
@@ -38,7 +37,41 @@ HEADERS = {
 }
 
 # ─────────────────────────────────────────────
-# 1. STATE / PENCATAT DATA INTERNAL
+# 1. LOGGER (Console + File dengan rotasi)
+#    Maks 3 file × 500 KB = 1.5 MB total
+# ─────────────────────────────────────────────
+os.makedirs("logs", exist_ok=True)
+
+_logger = logging.getLogger("plinko_bot")
+_logger.setLevel(logging.INFO)
+
+_fh = RotatingFileHandler(
+    "logs/bot.log",
+    maxBytes=500_000,   # 500 KB per file
+    backupCount=3,       # simpan 3 file lama → maks 1.5 MB total
+    encoding="utf-8",
+)
+_fh.setFormatter(logging.Formatter("%(asctime)s  %(message)s", datefmt="%Y-%m-%d %H:%M:%S"))
+_logger.addHandler(_fh)
+
+
+def log(msg: str):
+    """Cetak ke console sekaligus tulis ke log file."""
+    print(msg, flush=True)
+    _logger.info(msg)
+
+
+# ─────────────────────────────────────────────
+# 2. CONFIG (reload setiap sesi)
+# ─────────────────────────────────────────────
+def load_config() -> dict:
+    with open("config.json", "r") as f:
+        return json.load(f)
+
+BOT_CONFIG = load_config()   # load awal
+
+# ─────────────────────────────────────────────
+# 3. STATE / PENCATAT DATA INTERNAL
 # ─────────────────────────────────────────────
 def fresh_stats():
     return {
@@ -51,7 +84,7 @@ def fresh_stats():
 stats = fresh_stats()
 
 # ─────────────────────────────────────────────
-# 2. GRAPHQL QUERIES
+# 4. GRAPHQL QUERIES
 # ─────────────────────────────────────────────
 PLINKO_BET_MUTATION = """
 mutation PlinkoBet($amount: Float!, $rows: Int!, $risk: CasinoGamePlinkoRiskEnum!, $currency: CurrencyEnum!) {
@@ -82,7 +115,7 @@ query UserBalance {
 """
 
 # ─────────────────────────────────────────────
-# 3. FUNGSI API
+# 5. FUNGSI API
 # ─────────────────────────────────────────────
 def fetch_balances() -> tuple:
     """Return (username, saldo_aktif, [(currency, amount), ...])"""
@@ -155,10 +188,9 @@ def send_bet(amount: float, rows: int, risk: str) -> dict:
     }
 
 # ─────────────────────────────────────────────
-# 4. HELPER DISPLAY
+# 6. HELPER DISPLAY
 # ─────────────────────────────────────────────
 def fmt_duration(seconds: int) -> str:
-    """Konversi detik ke format jam/menit/detik yang mudah dibaca."""
     if seconds >= 3600:
         return f"{seconds // 3600} jam"
     if seconds >= 60:
@@ -168,35 +200,34 @@ def fmt_duration(seconds: int) -> str:
 
 def print_header(username: str, all_balances: list, session_num: int):
     cur = BOT_CONFIG.get("currency", "btc").upper()
-    print("\n" + "=" * 55)
-    print(f"   STAKE PLINKO WAGER BOT — SESI #{session_num}")
-    print("=" * 55)
-    print(f"  Username    : {username}")
+    log("\n" + "=" * 55)
+    log(f"   STAKE PLINKO WAGER BOT — SESI #{session_num}")
+    log("=" * 55)
+    log(f"  Username    : {username}")
     for c, a in all_balances:
         marker = " ← aktif" if c == BOT_CONFIG.get("currency", "btc") else ""
-        print(f"  Saldo {c.upper():6s}: {a:.8f}{marker}")
-    print("─" * 55)
-    print(f"  Base Bet    : {BOT_CONFIG['baseBet']:,} {cur}")
-    print(f"  Setelan     : {BOT_CONFIG['rows']} Rows | Risk {BOT_CONFIG['risk'].upper()}")
+        log(f"  Saldo {c.upper():6s}: {a:.8f}{marker}")
+    log("─" * 55)
+    log(f"  Base Bet    : {BOT_CONFIG['baseBet']:,} {cur}")
+    log(f"  Setelan     : {BOT_CONFIG['rows']} Rows | Risk {BOT_CONFIG['risk'].upper()}")
     if BOT_CONFIG.get("maxSpins"):
-        print(f"  Max Spins   : {BOT_CONFIG['maxSpins']:,}  → pause {fmt_duration(BOT_CONFIG.get('pauseOnMaxSpins', 0))}")
-    print(f"  Target Wager: {BOT_CONFIG['targetWager']:,}  → pause {fmt_duration(BOT_CONFIG.get('pauseOnTargetWager', 0))}")
-    print(f"  Stop Loss   : -{BOT_CONFIG['stopLoss']:,}  → pause {fmt_duration(BOT_CONFIG.get('pauseOnStopLoss', 0))}")
-    print(f"  Take Profit : +{BOT_CONFIG['takeProfit']:,}  → pause {fmt_duration(BOT_CONFIG.get('pauseOnTakeProfit', 0))}")
-    print(f"  Delay       : {BOT_CONFIG['delayInterval']}s  |  Retry: {BOT_CONFIG.get('retryDelay', 2)}s")
-    print("=" * 55)
+        log(f"  Max Spins   : {BOT_CONFIG['maxSpins']:,}  → pause {fmt_duration(BOT_CONFIG.get('pauseOnMaxSpins', 0))}")
+    log(f"  Target Wager: {BOT_CONFIG['targetWager']:,}  → pause {fmt_duration(BOT_CONFIG.get('pauseOnTargetWager', 0))}")
+    log(f"  Stop Loss   : -{BOT_CONFIG['stopLoss']:,}  → pause {fmt_duration(BOT_CONFIG.get('pauseOnStopLoss', 0))}")
+    log(f"  Take Profit : +{BOT_CONFIG['takeProfit']:,}  → pause {fmt_duration(BOT_CONFIG.get('pauseOnTakeProfit', 0))}")
+    log(f"  Delay       : {BOT_CONFIG['delayInterval']}s  |  Retry: {BOT_CONFIG.get('retryDelay', 2)}s  |  Max Retry: {BOT_CONFIG.get('maxRetries', 5)}x")
+    log("=" * 55)
 
 
 def pause_bot(reason: str, pause_seconds: int):
-    """Tampilkan summary sesi dan mulai countdown pause."""
-    print("\n" + "=" * 55)
-    print(f"  ⏸  BOT PAUSE: {reason}")
-    print("=" * 55)
-    print(f"  Total Spins : {stats['totalSpins']:,} kali")
-    print(f"  Total Wager : {stats['totalWagered']:,.2f}")
-    print(f"  Profit Sesi : {stats['currentProfit']:+,.2f}")
-    print(f"  Istirahat   : {fmt_duration(pause_seconds)}")
-    print("=" * 55)
+    log("\n" + "=" * 55)
+    log(f"  ⏸  BOT PAUSE: {reason}")
+    log("=" * 55)
+    log(f"  Total Spins : {stats['totalSpins']:,} kali")
+    log(f"  Total Wager : {stats['totalWagered']:,.2f}")
+    log(f"  Profit Sesi : {stats['currentProfit']:+,.2f}")
+    log(f"  Istirahat   : {fmt_duration(pause_seconds)}")
+    log("=" * 55)
 
     if pause_seconds <= 0:
         return
@@ -205,20 +236,20 @@ def pause_bot(reason: str, pause_seconds: int):
     elapsed  = 0
     while elapsed < pause_seconds:
         sisa = pause_seconds - elapsed
-        print(f"  ⏳ Lanjut dalam {fmt_duration(sisa)}...", flush=True)
+        log(f"  ⏳ Lanjut dalam {fmt_duration(sisa)}...")
         sleep_time = min(interval, sisa)
         time.sleep(sleep_time)
         elapsed += sleep_time
 
-    print("  ▶  Pause selesai, memulai sesi baru...\n")
+    log("  ▶  Pause selesai, memulai sesi baru...\n")
 
 # ─────────────────────────────────────────────
-# 5. LOGIKA UTAMA BOT
+# 7. LOGIKA UTAMA BOT
 # ─────────────────────────────────────────────
 def execute_single_bet() -> tuple:
     """
     Satu siklus taruhan.
-    Return: (lanjut: bool, pause_detik: int)
+    Return: (lanjut: bool, pause_detik: int, alasan: str)
     """
     cfg    = BOT_CONFIG
     result = send_bet(cfg["baseBet"], cfg["rows"], cfg["risk"])
@@ -229,7 +260,7 @@ def execute_single_bet() -> tuple:
     stats["totalSpins"]    += 1
 
     sign = "+" if stats["currentProfit"] >= 0 else ""
-    print(
+    log(
         f"#{stats['totalSpins']:04d}"
         f"  x{result['multiplier']:.2f}"
         f"  Wager: {stats['totalWagered']:,.0f}"
@@ -255,32 +286,52 @@ def execute_single_bet() -> tuple:
 
 def run_session(session_num: int, username: str, all_balances: list):
     """Jalankan satu sesi penuh. Return (pause_detik, alasan)."""
-    global stats
-    stats = fresh_stats()
+    global stats, BOT_CONFIG
 
+    # ── Reload config setiap awal sesi ──
+    try:
+        BOT_CONFIG = load_config()
+    except Exception as e:
+        log(f"[WARN] Gagal reload config, pakai config lama: {e}")
+
+    stats = fresh_stats()
     print_header(username, all_balances, session_num)
 
     _, active_bal, _ = fetch_balances()
     stats["initialBalance"] = active_bal
 
-    print("  Bot berjalan... tekan Ctrl+C untuk hentikan manual.\n")
+    log("  Bot berjalan... tekan Ctrl+C untuk hentikan manual.\n")
 
-    retry_delay = BOT_CONFIG.get("retryDelay", 2)
+    retry_base  = BOT_CONFIG.get("retryDelay", 2)
+    max_retries = BOT_CONFIG.get("maxRetries", 5)
+    retry_count = 0   # counter error berturut-turut
 
     while True:
         try:
             lanjut, pause_detik, alasan = execute_single_bet()
+            retry_count = 0   # reset setelah bet berhasil
             if not lanjut:
                 return pause_detik, alasan
             time.sleep(BOT_CONFIG["delayInterval"])
 
         except Exception as e:
             err = str(e)
+
+            # Saldo habis → stop langsung
             if "insufficientBalance" in err:
                 return 0, "SALDO HABIS! Top up dulu lalu restart bot"
-            print(f"[ERROR] {e}")
-            print(f"        Retry dalam {retry_delay} detik...")
-            time.sleep(retry_delay)
+
+            retry_count += 1
+
+            # Melebihi batas retry → stop sesi
+            if retry_count >= max_retries:
+                return 0, f"KONEKSI GAGAL {max_retries}x BERTURUT-TURUT — periksa jaringan/VPS"
+
+            # Exponential backoff: 2s → 4s → 8s → 16s … capped 60s
+            backoff = min(retry_base * (2 ** (retry_count - 1)), 60)
+            log(f"[ERROR] {e}")
+            log(f"        Retry {retry_count}/{max_retries} dalam {backoff:.0f} detik...")
+            time.sleep(backoff)
 
 
 def start_bot():
@@ -295,16 +346,16 @@ def start_bot():
         try:
             pause_detik, alasan = run_session(session_num, username, all_balances)
 
-            if "SALDO HABIS" in alasan:
-                # Stop total — tidak ada gunanya pause kalau saldo habis
-                print("\n" + "=" * 55)
-                print(f"  🛑 BOT BERHENTI: {alasan}")
-                print("=" * 55)
+            # Kondisi stop total
+            if "SALDO HABIS" in alasan or "KONEKSI GAGAL" in alasan:
+                log("\n" + "=" * 55)
+                log(f"  🛑 BOT BERHENTI: {alasan}")
+                log("=" * 55)
                 break
 
             pause_bot(alasan, pause_detik)
 
-            # Refresh saldo setelah pause sebelum sesi baru
+            # Refresh saldo & username sebelum sesi baru
             try:
                 username, _, all_balances = fetch_balances()
             except Exception:
@@ -313,17 +364,17 @@ def start_bot():
             session_num += 1
 
         except KeyboardInterrupt:
-            print("\n" + "=" * 55)
-            print("  🛑 BOT DIHENTIKAN MANUAL (Ctrl+C)")
-            print(f"  Total Sesi  : {session_num}")
-            print(f"  Total Spins : {stats['totalSpins']:,} kali")
-            print(f"  Total Wager : {stats['totalWagered']:,.2f}")
-            print(f"  Profit Sesi : {stats['currentProfit']:+,.2f}")
-            print("=" * 55)
+            log("\n" + "=" * 55)
+            log("  🛑 BOT DIHENTIKAN MANUAL (Ctrl+C)")
+            log(f"  Total Sesi  : {session_num}")
+            log(f"  Total Spins : {stats['totalSpins']:,} kali")
+            log(f"  Total Wager : {stats['totalWagered']:,.2f}")
+            log(f"  Profit Sesi : {stats['currentProfit']:+,.2f}")
+            log("=" * 55)
             break
 
 # ─────────────────────────────────────────────
-# 6. ENTRY POINT
+# 8. ENTRY POINT
 # ─────────────────────────────────────────────
 if __name__ == "__main__":
     start_bot()

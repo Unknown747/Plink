@@ -11,6 +11,7 @@
 
   "delayInterval": 0.4,
   "retryDelay": 2,
+  "maxRetries": 5,
 
   "pauseOnMaxSpins":    300,
   "pauseOnTargetWager": 21600,
