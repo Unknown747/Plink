@@ -1,0 +1,9 @@
+{
+  "baseBet": 1000,
+  "rows": 15,
+  "risk": "low",
+  "delayInterval": 0.4,
+  "targetWager": 10000000,
+  "stopLoss": 5000,
+  "takeProfit": 20000
+}

@@ -7,25 +7,37 @@ Bot otomatis untuk bermain Plinko di Stake.com menggunakan GraphQL API resmi.
 
 ## Cara Menjalankan
 ```bash
-python stake_plinko_bot.py
+# 1. Siapkan file .env
+cp .env.example .env
+# Isi STAKE_API_KEY di dalam .env
+
+# 2. Jalankan bot
+python main.py
 ```
 
 ## Konfigurasi
-Edit bagian `BOT_CONFIG` dan `API_KEY` di `stake_plinko_bot.py`:
 
-| Parameter      | Default        | Keterangan                              |
-|----------------|----------------|-----------------------------------------|
-| `API_KEY`      | *(wajib diisi)*| x-access-token dari akun Stake kamu     |
-| `baseBet`      | 1000           | Taruhan per spin                        |
-| `rows`         | 15             | Jumlah baris Plinko (8/12/15/16)        |
-| `risk`         | `"low"`        | Risiko: `low` / `medium` / `high`       |
-| `delayInterval`| 0.4 detik      | Jeda antar spin (anti rate-limit)       |
-| `targetWager`  | 10.000.000     | Bot pause saat total wager tercapai     |
-| `stopLoss`     | 5.000          | Bot pause saat rugi melebihi nilai ini  |
-| `takeProfit`   | 20.000         | Bot pause saat profit melebihi nilai ini|
+### API Token — `.env`
+| Variable        | Keterangan                          |
+|-----------------|-------------------------------------|
+| `STAKE_API_KEY` | x-access-token dari akun Stake kamu |
 
-## File Utama
-- `stake_plinko_bot.py` — script utama bot
+### Pengaturan Bot — `config.json`
+| Parameter       | Default     | Keterangan                              |
+|-----------------|-------------|-----------------------------------------|
+| `baseBet`       | 1000        | Taruhan per spin                        |
+| `rows`          | 15          | Jumlah baris Plinko (8/12/15/16)        |
+| `risk`          | `"low"`     | Risiko: `low` / `medium` / `high`       |
+| `delayInterval` | 0.4 detik   | Jeda antar spin (anti rate-limit)       |
+| `targetWager`   | 10.000.000  | Bot pause saat total wager tercapai     |
+| `stopLoss`      | 5.000       | Bot pause saat rugi melebihi nilai ini  |
+| `takeProfit`    | 20.000      | Bot pause saat profit melebihi nilai ini|
+
+## Struktur File
+- `main.py` — script utama bot
+- `config.json` — pengaturan bot (bisa diedit bebas)
+- `.env` — API token (jangan di-commit ke git)
+- `.env.example` — template env
 - `Stake.md` — blueprint asli (JavaScript)
 
 ## User Preferences
