@@ -2,10 +2,10 @@
 =================================================================
   STAKE PLINKO VIP WAGER BOT - AUTO-PILOT (Python Version)
   Konfigurasi : config.json
-  API Token   : .env  (STAKE_API_KEY)
+  API Token   : Replit Secret → STAKE_API_KEY
 =================================================================
   Cara pakai:
-    1. cp .env.example .env  → isi STAKE_API_KEY
+    1. Set STAKE_API_KEY di Replit Secrets
     2. Sesuaikan config.json sesuai kebutuhan
     3. Jalankan: python main.py
 =================================================================
@@ -26,8 +26,7 @@ load_dotenv()
 API_KEY = os.environ.get("STAKE_API_KEY", "")
 if not API_KEY:
     raise SystemExit(
-        "[ERROR] STAKE_API_KEY belum diisi.\n"
-        "Salin .env.example → .env lalu isi token kamu."
+        "[ERROR] STAKE_API_KEY belum diisi di Replit Secrets."
     )
 
 with open("config.json", "r") as f:
@@ -57,17 +56,11 @@ PLINKO_BET_MUTATION = """
 mutation PlinkoBet($amount: Float!, $rows: Int!, $risk: CasinoGamePlinkoRiskEnum!, $currency: CurrencyEnum!) {
   plinkoBet(amount: $amount, rows: $rows, risk: $risk, currency: $currency) {
     id
-    active
     payoutMultiplier
-    amountMultiplier
     amount
     payout
-    updatedAt
     currency
-    game
     user {
-      id
-      name
       balances {
         available { amount currency }
       }
@@ -90,63 +83,59 @@ query UserBalance {
 # ─────────────────────────────────────────────
 # 3. FUNGSI API
 # ─────────────────────────────────────────────
-def get_all_balances() -> list:
-    """Ambil semua saldo dari semua currency."""
-    try:
-        r = requests.post(API_URL, json={"query": BALANCE_QUERY}, headers=HEADERS, timeout=10)
-        if not r.ok:
-            print(f"[PERINGATAN] Gagal ambil saldo HTTP {r.status_code}: {r.text[:300]}")
-            return []
-        data = r.json()
-        if "errors" in data:
-            print(f"[PERINGATAN] GraphQL error saldo: {data['errors']}")
-            return []
-        user = data["data"]["user"]
-        print(f"  Username    : {user['name']}")
-        balances = user["balances"]
-        # Tampilkan semua saldo yang ada isinya
-        has_funds = []
-        for b in balances:
-            amt = float(b["available"]["amount"])
-            cur = b["available"]["currency"]
-            if amt > 0:
-                print(f"  Saldo {cur.upper():6s}: {amt:.8f}")
-                has_funds.append(b["available"])
-        if not has_funds:
-            print("  [!] Semua saldo kosong. Pastikan currency di config.json sesuai.")
-        return has_funds
-    except Exception as e:
-        print(f"[PERINGATAN] Gagal ambil saldo: {e}")
-        return []
+def fetch_balances() -> tuple[str, float, list]:
+    """
+    Ambil semua saldo dari Stake API.
+    Return: (username, saldo_currency_aktif, daftar_semua_saldo)
+    """
+    r = requests.post(API_URL, json={"query": BALANCE_QUERY}, headers=HEADERS, timeout=10)
+    if not r.ok:
+        raise Exception(f"HTTP {r.status_code}: {r.text[:300]}")
+    data = r.json()
+    if "errors" in data:
+        raise Exception(f"GraphQL: {data['errors']}")
+
+    user     = data["data"]["user"]
+    username = user["name"]
+    balances = user["balances"]
+    target   = BOT_CONFIG.get("currency", "btc")
+
+    active_balance = 0.0
+    seen_currencies = set()
+    all_balances    = []
+
+    for b in balances:
+        amt = float(b["available"]["amount"])
+        cur = b["available"]["currency"]
+        if cur in seen_currencies:          # skip duplikat
+            continue
+        seen_currencies.add(cur)
+        if amt > 0:
+            all_balances.append((cur, amt))
+        if cur == target:
+            active_balance = amt
+
+    return username, active_balance, all_balances
 
 
-def get_current_balance() -> float:
-    """Ambil saldo untuk currency yang dikonfigurasi."""
-    target_currency = BOT_CONFIG.get("currency", "btc")
-    try:
-        r = requests.post(API_URL, json={"query": BALANCE_QUERY}, headers=HEADERS, timeout=10)
-        if not r.ok:
-            print(f"[PERINGATAN] Gagal ambil saldo HTTP {r.status_code}: {r.text[:300]}")
-            return 0.0
-        data = r.json()
-        if "errors" in data:
-            print(f"[PERINGATAN] GraphQL error saldo: {data['errors']}")
-            return 0.0
-        balances = data["data"]["user"]["balances"]
-        for b in balances:
-            if b["available"]["currency"] == target_currency:
-                return float(b["available"]["amount"])
-        return 0.0
-    except Exception as e:
-        print(f"[PERINGATAN] Gagal ambil saldo: {e}")
-        return 0.0
+def get_balance_from_bet(bet_data: dict) -> float:
+    """Ambil saldo currency aktif dari response bet."""
+    target = BOT_CONFIG.get("currency", "btc")
+    seen   = set()
+    for b in bet_data["user"]["balances"]:
+        cur = b["available"]["currency"]
+        if cur in seen:
+            continue
+        seen.add(cur)
+        if cur == target:
+            return float(b["available"]["amount"])
+    return 0.0
 
 
 def send_bet(amount: float, rows: int, risk: str) -> dict:
     """
     Kirim taruhan Plinko ke Stake.
     Return dict: multiplier, payout, balance.
-    Raise Exception jika ada error API.
     """
     payload = {
         "query": PLINKO_BET_MUTATION,
@@ -161,7 +150,6 @@ def send_bet(amount: float, rows: int, risk: str) -> dict:
     if not r.ok:
         raise Exception(f"HTTP {r.status_code}: {r.text[:500]}")
     data = r.json()
-
     if "errors" in data:
         raise Exception(f"GraphQL Error: {data['errors']}")
 
@@ -169,18 +157,27 @@ def send_bet(amount: float, rows: int, risk: str) -> dict:
     return {
         "multiplier": float(bet["payoutMultiplier"]),
         "payout":     float(bet["payout"]),
-        "balance":    float(bet["user"]["balances"][0]["available"]["amount"]),
+        "balance":    get_balance_from_bet(bet),
     }
+
 
 # ─────────────────────────────────────────────
 # 4. LOGIKA UTAMA BOT
 # ─────────────────────────────────────────────
-def print_header():
+def print_header(username: str, active_bal: float, all_balances: list):
+    cur = BOT_CONFIG.get("currency", "btc").upper()
     print("=" * 55)
     print("   STAKE PLINKO WAGER BOT — AUTO-PILOT")
     print("=" * 55)
-    print(f"  Base Bet    : {BOT_CONFIG['baseBet']:,}")
+    print(f"  Username    : {username}")
+    for c, a in all_balances:
+        marker = " ← aktif" if c == BOT_CONFIG.get("currency", "btc") else ""
+        print(f"  Saldo {c.upper():6s}: {a:.8f}{marker}")
+    print("─" * 55)
+    print(f"  Base Bet    : {BOT_CONFIG['baseBet']:,} {cur}")
     print(f"  Setelan     : {BOT_CONFIG['rows']} Rows | Risk {BOT_CONFIG['risk'].upper()}")
+    if BOT_CONFIG.get("maxSpins"):
+        print(f"  Max Spins   : {BOT_CONFIG['maxSpins']:,}")
     print(f"  Target Wager: {BOT_CONFIG['targetWager']:,}")
     print(f"  Stop Loss   : -{BOT_CONFIG['stopLoss']:,}")
     print(f"  Take Profit : +{BOT_CONFIG['takeProfit']:,}")
@@ -199,7 +196,7 @@ def stop_bot(reason: str):
 
 def execute_single_bet() -> bool:
     """Satu siklus taruhan. Return False jika bot harus berhenti."""
-    cfg = BOT_CONFIG
+    cfg    = BOT_CONFIG
     result = send_bet(cfg["baseBet"], cfg["rows"], cfg["risk"])
 
     profit_loss = result["payout"] - cfg["baseBet"]
@@ -207,16 +204,19 @@ def execute_single_bet() -> bool:
     stats["currentProfit"] += profit_loss
     stats["totalSpins"]    += 1
 
-    profit_sign = "+" if stats["currentProfit"] >= 0 else ""
+    sign = "+" if stats["currentProfit"] >= 0 else ""
     print(
         f"#{stats['totalSpins']:04d}"
         f"  x{result['multiplier']:.2f}"
         f"  Wager: {stats['totalWagered']:,.0f}"
         f"  Saldo: {result['balance']:,.2f}"
-        f"  Profit: {profit_sign}{stats['currentProfit']:,.2f}"
+        f"  Profit: {sign}{stats['currentProfit']:,.2f}"
     )
 
     # Safety Checks
+    if cfg.get("maxSpins") and stats["totalSpins"] >= cfg["maxSpins"]:
+        stop_bot(f"MAX SPIN ({cfg['maxSpins']:,}) TERCAPAI!")
+        return False
     if stats["totalWagered"] >= cfg["targetWager"]:
         stop_bot("TARGET WAGER TERCAPAI! Target dipenuhi dengan aman.")
         return False
@@ -231,12 +231,14 @@ def execute_single_bet() -> bool:
 
 
 def start_bot():
-    print_header()
+    try:
+        username, active_bal, all_balances = fetch_balances()
+    except Exception as e:
+        raise SystemExit(f"[ERROR] Gagal konek ke Stake: {e}")
 
-    get_all_balances()
-    stats["initialBalance"] = get_current_balance()
-    print(f"  Saldo {BOT_CONFIG.get('currency','btc').upper():6s}: {stats['initialBalance']:.8f}")
-    print("=" * 55)
+    print_header(username, active_bal, all_balances)
+    stats["initialBalance"] = active_bal
+
     print("  Bot berjalan... tekan Ctrl+C untuk hentikan manual.")
     print("=" * 55 + "\n")
 
@@ -253,8 +255,8 @@ def start_bot():
             break
 
         except Exception as e:
-            print(f"[ERROR] Koneksi Error/Lag: {e}")
-            print(f"        Mencoba ulang dalam {retry_delay} detik...")
+            print(f"[ERROR] {e}")
+            print(f"        Retry dalam {retry_delay} detik...")
             time.sleep(retry_delay)
 
 

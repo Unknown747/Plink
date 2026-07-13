@@ -1,10 +1,11 @@
 {
-  "baseBet": 10,
+  "baseBet": 500,
   "rows": 15,
   "risk": "low",
   "currency": "idr",
   "delayInterval": 0.4,
+  "maxSpins": 1000,
   "targetWager": 10000000,
-  "stopLoss": 50,
-  "takeProfit": 200
+  "stopLoss": 5000,
+  "takeProfit": 20000
 }
