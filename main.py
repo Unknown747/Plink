@@ -181,6 +181,7 @@ def print_header(username: str, active_bal: float, all_balances: list):
     print(f"  Target Wager: {BOT_CONFIG['targetWager']:,}")
     print(f"  Stop Loss   : -{BOT_CONFIG['stopLoss']:,}")
     print(f"  Take Profit : +{BOT_CONFIG['takeProfit']:,}")
+    print(f"  Delay       : {BOT_CONFIG['delayInterval']}s  |  Retry: {BOT_CONFIG.get('retryDelay', 2)}s")
     print("=" * 55)
 
 
@@ -242,7 +243,7 @@ def start_bot():
     print("  Bot berjalan... tekan Ctrl+C untuk hentikan manual.")
     print("=" * 55 + "\n")
 
-    retry_delay = 2
+    retry_delay = BOT_CONFIG.get("retryDelay", 2)
 
     while True:
         try:
@@ -255,6 +256,11 @@ def start_bot():
             break
 
         except Exception as e:
+            err = str(e)
+            # Saldo habis → berhenti langsung, jangan retry
+            if "insufficientBalance" in err:
+                stop_bot("SALDO HABIS! Top up dulu lalu restart bot.")
+                break
             print(f"[ERROR] {e}")
             print(f"        Retry dalam {retry_delay} detik...")
             time.sleep(retry_delay)
