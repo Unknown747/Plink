@@ -13,8 +13,8 @@
   "retryDelay": 2,
   "maxRetries": 5,
 
-  "pauseOnMaxSpins":    300,
+  "pauseOnMaxSpins":     180,
   "pauseOnTargetWager": 21600,
-  "pauseOnStopLoss":    3600,
-  "pauseOnTakeProfit":  1800
+  "pauseOnStopLoss":    1800,
+  "pauseOnTakeProfit":   600
 }
