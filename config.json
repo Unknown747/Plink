@@ -3,11 +3,17 @@
   "rows": 15,
   "risk": "low",
   "currency": "idr",
+
   "maxSpins": 1000,
   "targetWager": 10000000,
   "stopLoss": 5000,
   "takeProfit": 20000,
 
   "delayInterval": 0.4,
-  "retryDelay": 2
+  "retryDelay": 2,
+
+  "pauseOnMaxSpins":    300,
+  "pauseOnTargetWager": 21600,
+  "pauseOnStopLoss":    3600,
+  "pauseOnTakeProfit":  1800
 }
