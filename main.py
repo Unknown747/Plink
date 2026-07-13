@@ -207,12 +207,13 @@ def execute_single_bet() -> bool:
     stats["currentProfit"] += profit_loss
     stats["totalSpins"]    += 1
 
+    profit_sign = "+" if stats["currentProfit"] >= 0 else ""
     print(
-        f"[Spin #{stats['totalSpins']:>5}] "
-        f"Multiplier: {result['multiplier']:.2f}x | "
-        f"Wager: {stats['totalWagered']:>12,.0f} | "
-        f"Saldo: {result['balance']:>12,.2f} | "
-        f"Profit: {stats['currentProfit']:>+12,.2f}"
+        f"#{stats['totalSpins']:04d}"
+        f"  x{result['multiplier']:.2f}"
+        f"  Wager: {stats['totalWagered']:,.0f}"
+        f"  Saldo: {result['balance']:,.2f}"
+        f"  Profit: {profit_sign}{stats['currentProfit']:,.2f}"
     )
 
     # Safety Checks
