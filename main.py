@@ -232,14 +232,18 @@ def pause_bot(reason: str, pause_seconds: int):
     if pause_seconds <= 0:
         return
 
-    interval = 60 if pause_seconds >= 120 else 10
-    elapsed  = 0
+    # Tidur dalam satu blok — tidak spam log selama pause
+    # Hanya cetak pengingat setiap 30 menit untuk pause panjang (agar VPS
+    # terasa "hidup" di console tanpa membengkakkan log file)
+    remind_interval = 1800 if pause_seconds >= 1800 else pause_seconds
+    elapsed = 0
     while elapsed < pause_seconds:
-        sisa = pause_seconds - elapsed
-        log(f"  ⏳ Lanjut dalam {fmt_duration(sisa)}...")
-        sleep_time = min(interval, sisa)
+        sisa       = pause_seconds - elapsed
+        sleep_time = min(remind_interval, sisa)
         time.sleep(sleep_time)
         elapsed += sleep_time
+        if elapsed < pause_seconds:
+            log(f"  ⏳ Lanjut dalam {fmt_duration(pause_seconds - elapsed)}...")
 
     log("  ▶  Pause selesai, memulai sesi baru...\n")
 
