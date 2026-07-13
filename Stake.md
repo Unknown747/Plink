@@ -103,3 +103,9 @@ function stopBot(reason) {
 function getCurrentBalance() { return 0; }
 function sendBetToServer(bet, rows, risk) { return Promise.resolve({ multiplier: 0.7 }); }
 Log yang di harapkan #123 (jumlah spin/klik) | Wager : 1370(jumlah wager) | Saldo : Saldo Akun | Profit -/+ 17289 (angka profit/loss)
+
+API_URL = "https://stake.com/_api/graphql"
+HEADERS = {
+    "Content-Type": "application/json",
+    "x-access-token": API_KEY,
+    "Connection": "keep-alive",
