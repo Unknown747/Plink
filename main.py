@@ -301,8 +301,9 @@ def run_session(session_num: int, username: str, all_balances: list):
     stats = fresh_stats()
     print_header(username, all_balances, session_num)
 
-    _, active_bal, _ = fetch_balances()
-    stats["initialBalance"] = active_bal
+    # Ambil saldo aktif dari data yang sudah di-fetch — tidak perlu API call lagi
+    target = BOT_CONFIG.get("currency", "btc")
+    stats["initialBalance"] = next((a for c, a in all_balances if c == target), 0.0)
 
     log("  Bot berjalan... tekan Ctrl+C untuk hentikan manual.\n")
 

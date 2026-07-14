@@ -9,7 +9,7 @@
   "stopLoss": 10000,
   "takeProfit": 5000,
 
-  "delayInterval": 0.4,
+  "delayInterval": 0.2,
   "retryDelay": 2,
   "maxRetries": 5,
 
