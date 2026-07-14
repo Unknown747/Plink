@@ -71,6 +71,16 @@ def load_config() -> dict:
 BOT_CONFIG = load_config()   # load awal
 
 # ─────────────────────────────────────────────
+# 2b. TIMER GLOBAL (mulai saat bot pertama kali jalan)
+# ─────────────────────────────────────────────
+BOT_START_TIME: float = 0.0
+
+def elapsed_str() -> str:
+    """Kembalikan waktu berjalan dalam format HH:MM:SS."""
+    s = int(time.time() - BOT_START_TIME)
+    return f"{s//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}"
+
+# ─────────────────────────────────────────────
 # 3. STATE / PENCATAT DATA INTERNAL
 # ─────────────────────────────────────────────
 def fresh_stats():
@@ -266,10 +276,11 @@ def execute_single_bet() -> tuple:
     sign = "+" if stats["currentProfit"] >= 0 else ""
     log(
         f"#{stats['totalSpins']:04d}"
-        f"  x{result['multiplier']:.2f}"
-        f"  Wager: {stats['totalWagered']:,.0f}"
-        f"  Saldo: {result['balance']:,.2f}"
-        f"  Profit: {sign}{stats['currentProfit']:,.2f}"
+        f" | x{result['multiplier']:.2f}"
+        f" | Wager: {stats['totalWagered']:,.0f}"
+        f" | Saldo: {result['balance']:,.2f}"
+        f" | Profit: {sign}{stats['currentProfit']:,.2f}"
+        f" | {elapsed_str()}"
     )
 
     # ── Safety Checks ──────────────────────────────
@@ -340,6 +351,9 @@ def run_session(session_num: int, username: str, all_balances: list):
 
 
 def start_bot():
+    global BOT_START_TIME
+    BOT_START_TIME = time.time()
+
     try:
         username, _, all_balances = fetch_balances()
     except Exception as e:
